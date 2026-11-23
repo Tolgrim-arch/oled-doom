@@ -1,5 +1,7 @@
 # OLED-DOOM (1-Bit Roguelite)
 
+**Jugar ahora (GitHub Pages):** https://tolgrim-arch.github.io/oled-doom/
+
 Roguelite ligero estilo DOOM en **128×64 píxeles monocromo (1-bit)** diseñado para simular una pantalla OLED 0.96" y controlarse mediante un **Arduino Mega 2560 / UNO** con módulo joystick **KY-023** vía **Web Serial API**.
 
 ## Características
