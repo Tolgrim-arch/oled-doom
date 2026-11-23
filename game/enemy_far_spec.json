@@ -1,0 +1,27 @@
+{
+  "fresh": true,
+  "width": 6,
+  "height": 8,
+  "style": "lineless",
+  "palette": {
+    "W": "#FFFFFF",
+    "B": "#000000"
+  },
+  "ops": [
+    {
+      "op": "grid",
+      "x": 0,
+      "y": 0,
+      "rows": [
+        "W....W",
+        ".WWWW.",
+        "WBWWBW",
+        "WWWWWW",
+        ".WBBW.",
+        "WWWWWW",
+        ".WWWW.",
+        ".W..W."
+      ]
+    }
+  ]
+}

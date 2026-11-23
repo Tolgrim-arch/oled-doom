@@ -1,0 +1,51 @@
+{
+  "fresh": true,
+  "width": 24,
+  "height": 32,
+  "style": "lineless",
+  "palette": {
+    "W": "#FFFFFF",
+    "B": "#000000"
+  },
+  "ops": [
+    {
+      "op": "grid",
+      "x": 0,
+      "y": 0,
+      "rows": [
+        "WW....................WW",
+        "WWW..................WWW",
+        ".WWW................WWW.",
+        "..WWW....WWWWWW....WWW..",
+        "...WWWWWWWWWWWWWWWWWW...",
+        "...WWWWWWWWWWWWWWWWWW...",
+        "..WWWWWWWWWWWWWWWWWWWW..",
+        "..WWWBWWWWWWWWWWWWBWWW..",
+        "..WWBBBWWWWWWWWWWBBBWW..",
+        "..WWBBBWWWWWWWWWWBBBWW..",
+        "..WWWWWWWWWWWWWWWWWWWW..",
+        "...WWWWWWWWWWWWWWWWWW...",
+        "...WWWWBBBBBBBBBBWWWW...",
+        "...WWWBWBWBWBWBWBWWWW...",
+        "....WWWWWWWWWWWWWWWW....",
+        ".....WWWWWWWWWWWWWW.....",
+        "..WWWWWWWWWWWWWWWWWWWW..",
+        ".WWWWWWWWWWWWWWWWWWWWWW.",
+        "WWW..WWWWWWWWWWWWWW..WWW",
+        "WW...WWWWWWWWWWWWWW...WW",
+        "W....WWWWWWWWWWWWWW....W",
+        ".....WWWWWWWWWWWWWW.....",
+        "......WWWWWWWWWWWW......",
+        "......WWWW....WWWW......",
+        ".....WWWW......WWWW.....",
+        ".....WWWW......WWWW.....",
+        "....WWWW........WWWW....",
+        "....WWWW........WWWW....",
+        "...WWWW..........WWWW...",
+        "...WWW............WWW...",
+        "..WWW..............WWW..",
+        "..WW................WW.."
+      ]
+    }
+  ]
+}

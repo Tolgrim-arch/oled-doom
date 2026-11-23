@@ -1,0 +1,35 @@
+{
+  "fresh": true,
+  "width": 12,
+  "height": 16,
+  "style": "lineless",
+  "palette": {
+    "W": "#FFFFFF",
+    "B": "#000000"
+  },
+  "ops": [
+    {
+      "op": "grid",
+      "x": 0,
+      "y": 0,
+      "rows": [
+        "W..........W",
+        "WW........WW",
+        ".WW..WW..WW.",
+        "..WWWWWWWW..",
+        ".WWBWWWWBWW.",
+        ".WBBWWWWBBW.",
+        ".WWWWWWWWWW.",
+        "..WWBBBBWW..",
+        "..WBWBWBWW..",
+        "...WWWWWW...",
+        ".WWWWWWWWWW.",
+        "WW.WWWWWW.WW",
+        "W..WWWWWW..W",
+        "...WW..WW...",
+        "..WW....WW..",
+        ".WW......WW."
+      ]
+    }
+  ]
+}
