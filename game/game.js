@@ -82,9 +82,28 @@ const UPGRADE_POOL = [
   { id: 'fire', l1: 'FIRE', l2: '+20', apply: () => { player.fireRate = Math.max(0.12, player.fireRate * 0.8); } }
 ];
 
+// --- PERSISTENT META-PROGRESSION (localStorage) ---
+const SAVE_KEY = 'oled_doom_meta_v1';
+let meta = { coins: 0, hpLvl: 0, dmgLvl: 0, spdLvl: 0, magLvl: 0 };
+try {
+  const saved = JSON.parse(localStorage.getItem(SAVE_KEY));
+  if (saved && typeof saved.coins === 'number') meta = { ...meta, ...saved };
+} catch (_) {}
+
+function saveMeta() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(meta)); } catch (_) {}
+}
+
+const SHOP_ITEMS = [
+  { key: 'hpLvl',  label: 'HP+20',  baseCost: 100 },
+  { key: 'dmgLvl', label: 'DMG+1',  baseCost: 250 },
+  { key: 'spdLvl', label: 'SPD+10', baseCost: 150 },
+  { key: 'magLvl', label: 'MAG+2',  baseCost: 150 }
+];
+
 // --- GAME STATE ---
 let MAP = MAPS[0];
-let gameState = 'PLAYING'; // 'PLAYING' | 'LEVEL_UP' | 'GAME_OVER'
+let gameState = 'MENU'; // 'MENU' | 'SHOP' | 'PLAYING' | 'LEVEL_UP' | 'GAME_OVER'
 let floor = 1;
 let score = 0;
 let showMap = true;
@@ -105,6 +124,10 @@ const player = {
 let enemies = [];
 let levelUpCards = [];
 let selectedCard = 0;
+let menuIndex = 0;
+let shopIndex = 0;
+let gameOverIndex = 0;
+let lockTimer = 0; // 2.0s anti-missclick radial lock
 let menuMoveCooldown = 0;
 let prevActionDown = false;
 
@@ -170,14 +193,14 @@ function resetGame() {
   shootCooldown = 0;
   damageFlash = 0;
 
-  player.speed = 2.8;
-  player.hp = 100;
-  player.maxHp = 100;
+  player.speed = 2.8 * (1 + meta.spdLvl * 0.10);
+  player.hp = 100 + meta.hpLvl * 20;
+  player.maxHp = player.hp;
   player.invuln = 0;
-  player.damage = 1;
+  player.damage = 1 + meta.dmgLvl;
   player.fireRate = 0.30;
-  player.mag = 8;
-  player.maxMag = 8;
+  player.mag = 8 + meta.magLvl * 2;
+  player.maxMag = player.mag;
   player.reloadTimer = 0;
   player.reloadTime = 1.2;
   player.level = 1;
@@ -201,6 +224,7 @@ function triggerLevelUp() {
     levelUpCards.push(pool.splice(idx, 1)[0]);
   }
   selectedCard = 1; // Center card by default
+  lockTimer = 2.0;  // 2s radial anti-missclick lock
   menuMoveCooldown = 0.25;
   prevActionDown = true; // Require fresh press to confirm
 }
@@ -343,7 +367,11 @@ function updateEnemies(dt) {
         player.invuln = 0.6;
         damageFlash = 0.22;
         if (player.hp <= 0) {
+          meta.coins += score;
+          saveMeta();
           gameState = 'GAME_OVER';
+          gameOverIndex = 0;
+          lockTimer = 2.0; // 2s radial anti-missclick lock
           prevActionDown = true;
           return;
         }
@@ -385,8 +413,53 @@ function update(dt) {
   if (keysDown['KeyA'] || keysDown['ArrowLeft']) turn -= 1;
   if (keysDown['KeyD'] || keysDown['ArrowRight']) turn += 1;
 
+  let move = arduinoInput.move;
+  if (keysDown['KeyW'] || keysDown['ArrowUp']) move += 1;
+  if (keysDown['KeyS'] || keysDown['ArrowDown']) move -= 1;
+
+  if (menuMoveCooldown > 0) menuMoveCooldown -= dt;
+  if (lockTimer > 0) lockTimer = Math.max(0, lockTimer - dt);
+
+  if (gameState === 'MENU') {
+    if (menuMoveCooldown <= 0 && Math.abs(move) > 0.45) {
+      menuIndex = (menuIndex + 1) % 2;
+      menuMoveCooldown = 0.22;
+    }
+    if (actionPressed) {
+      if (menuIndex === 0) resetGame();
+      else { gameState = 'SHOP'; shopIndex = 0; }
+    }
+    return;
+  }
+
+  if (gameState === 'SHOP') {
+    const totalItems = SHOP_ITEMS.length + 1; // +1 for BACK
+    if (menuMoveCooldown <= 0) {
+      if (move > 0.45) {
+        shopIndex = (shopIndex + totalItems - 1) % totalItems;
+        menuMoveCooldown = 0.20;
+      } else if (move < -0.45) {
+        shopIndex = (shopIndex + 1) % totalItems;
+        menuMoveCooldown = 0.20;
+      }
+    }
+    if (actionPressed) {
+      if (shopIndex === SHOP_ITEMS.length) {
+        gameState = 'MENU';
+      } else {
+        const item = SHOP_ITEMS[shopIndex];
+        const cost = item.baseCost * (meta[item.key] + 1);
+        if (meta.coins >= cost) {
+          meta.coins -= cost;
+          meta[item.key]++;
+          saveMeta();
+        }
+      }
+    }
+    return;
+  }
+
   if (gameState === 'LEVEL_UP') {
-    if (menuMoveCooldown > 0) menuMoveCooldown -= dt;
     if (menuMoveCooldown <= 0) {
       if (turn < -0.45) {
         selectedCard = (selectedCard + 2) % 3;
@@ -396,7 +469,7 @@ function update(dt) {
         menuMoveCooldown = 0.22;
       }
     }
-    if (actionPressed) {
+    if (actionPressed && lockTimer <= 0) {
       levelUpCards[selectedCard].apply();
       gameState = 'PLAYING';
     }
@@ -404,7 +477,14 @@ function update(dt) {
   }
 
   if (gameState === 'GAME_OVER') {
-    if (actionPressed) resetGame();
+    if (menuMoveCooldown <= 0 && Math.abs(move) > 0.45) {
+      gameOverIndex = (gameOverIndex + 1) % 2;
+      menuMoveCooldown = 0.22;
+    }
+    if (actionPressed && lockTimer <= 0) {
+      if (gameOverIndex === 0) resetGame();
+      else gameState = 'MENU';
+    }
     return;
   }
 
@@ -422,10 +502,6 @@ function update(dt) {
       player.mag = player.maxMag;
     }
   }
-
-  let move = arduinoInput.move;
-  if (keysDown['KeyW'] || keysDown['ArrowUp']) move += 1;
-  if (keysDown['KeyS'] || keysDown['ArrowDown']) move -= 1;
 
   if (actionDown) tryShoot();
 
@@ -624,6 +700,10 @@ function renderWorld() {
       }
     }
     ctx.fillStyle = '#fff';
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      ctx.fillRect((ox + e.x * ms) | 0, (oy + e.y * ms) | 0, 1, 1);
+    }
     ctx.fillRect((ox + player.x * ms - 1) | 0, (oy + player.y * ms - 1) | 0, 2, 2);
   }
 
@@ -658,16 +738,81 @@ function renderWorld() {
   drawPixelText(`HP:${player.hp} F:${floor} A:${ammoText}`, 3, H - 7, '#fff');
 }
 
+function drawRadialLock(cx, cy, r, progress) {
+  if (progress <= 0) return;
+  ctx.fillStyle = '#fff';
+  const steps = Math.max(16, r * 8);
+  const maxStep = Math.floor(steps * progress);
+  for (let i = 0; i <= maxStep; i++) {
+    const a = -Math.PI / 2 + (i / steps) * Math.PI * 2;
+    const px = Math.round(cx + Math.cos(a) * r);
+    const py = Math.round(cy + Math.sin(a) * r);
+    ctx.fillRect(px, py, 1, 1);
+  }
+}
+
+function renderMenu() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  drawPixelText('OLED-DOOM', 46, 6, '#fff');
+  drawPixelText(`COINS:${meta.coins}`, 44, 15, '#fff');
+
+  const opts = ['PLAY', 'SHOP'];
+  for (let i = 0; i < 2; i++) {
+    const y = 28 + i * 13;
+    const sel = i === menuIndex;
+    ctx.fillStyle = sel ? '#fff' : '#000';
+    ctx.fillRect(40, y, 48, 10);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(40.5, y + 0.5, 47, 9);
+    drawPixelText(opts[i], 56, y + 2, sel ? '#000' : '#fff');
+  }
+  drawPixelText('Y:SEL  SW:OK', 38, 57, '#fff');
+}
+
+function renderShop() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  drawPixelText(`SHOP  C:${meta.coins}`, 4, 3, '#fff');
+
+  for (let i = 0; i < SHOP_ITEMS.length; i++) {
+    const item = SHOP_ITEMS[i];
+    const lvl = meta[item.key];
+    const cost = item.baseCost * (lvl + 1);
+    const y = 12 + i * 9;
+    const sel = i === shopIndex;
+
+    if (sel) {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(2, y, 124, 8);
+    }
+    const fg = sel ? '#000' : '#fff';
+    drawPixelText(`${item.label} L${lvl}`, 4, y + 1, fg);
+    drawPixelText(`${cost}C`, 96, y + 1, fg);
+  }
+
+  const backY = 12 + SHOP_ITEMS.length * 9 + 2;
+  const backSel = shopIndex === SHOP_ITEMS.length;
+  if (backSel) {
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(42, backY, 44, 8);
+  }
+  drawPixelText('BACK', 56, backY + 1, backSel ? '#000' : '#fff');
+}
+
 function renderLevelUp() {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, W, H);
   drawPixelText(`LVL ${player.level} - PICK 1`, 32, 3, '#fff');
 
   const cardW = 38;
-  const cardH = 42;
+  const cardH = 38;
   const gap = 4;
   const startX = 3;
-  const y = 13;
+  const y = 12;
 
   for (let i = 0; i < 3; i++) {
     const x = startX + i * (cardW + gap);
@@ -682,21 +827,41 @@ function renderLevelUp() {
     ctx.strokeRect(x + 0.5, y + 0.5, cardW - 1, cardH - 1);
 
     const fg = sel ? '#000' : '#fff';
-    drawPixelText(card.l1, x + ((cardW - card.l1.length * 4) / 2) | 0, y + 12, fg);
-    drawPixelText(card.l2, x + ((cardW - card.l2.length * 4) / 2) | 0, y + 24, fg);
+    drawPixelText(card.l1, x + ((cardW - card.l1.length * 4) / 2) | 0, y + 10, fg);
+    drawPixelText(card.l2, x + ((cardW - card.l2.length * 4) / 2) | 0, y + 22, fg);
   }
 
-  drawPixelText('X:MOVE  SW:OK', 36, 58, '#fff');
+  if (lockTimer > 0) {
+    drawRadialLock(64, 57, 5, lockTimer / 2.0);
+  } else {
+    drawPixelText('X:MOVE  SW:OK', 36, 56, '#fff');
+  }
 }
 
 function renderGameOver() {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, W, H);
 
-  drawPixelText('GAME OVER', 46, 12, '#fff');
-  drawPixelText(`FLOOR: ${floor}`, 44, 24, '#fff');
-  drawPixelText(`SCORE: ${score}`, 44, 34, '#fff');
-  drawPixelText('PRESS SW OR R', 38, 50, '#fff');
+  drawPixelText('GAME OVER', 46, 6, '#fff');
+  drawPixelText(`F:${floor} S:${score} +${score}C`, 20, 16, '#fff');
+
+  if (lockTimer > 0) {
+    drawPixelText('WAIT...', 50, 32, '#fff');
+    drawRadialLock(64, 48, 8, lockTimer / 2.0);
+  } else {
+    const opts = ['PLAY', 'MENU'];
+    for (let i = 0; i < 2; i++) {
+      const y = 28 + i * 13;
+      const sel = i === gameOverIndex;
+      ctx.fillStyle = sel ? '#fff' : '#000';
+      ctx.fillRect(40, y, 48, 10);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(40.5, y + 0.5, 47, 9);
+      drawPixelText(opts[i], 56, y + 2, sel ? '#000' : '#fff');
+    }
+    drawPixelText('Y:SEL  SW:OK', 38, 57, '#fff');
+  }
 }
 
 // --- 1-BIT 3x5 PIXEL FONT ---
@@ -740,7 +905,6 @@ function drawPixelText(text, x, y, color = '#fff') {
 }
 
 // --- MAIN LOOP ---
-resetGame();
 let lastTime = performance.now();
 
 function loop(now) {
@@ -748,7 +912,9 @@ function loop(now) {
   lastTime = now;
 
   update(dt);
-  if (gameState === 'PLAYING') renderWorld();
+  if (gameState === 'MENU') renderMenu();
+  else if (gameState === 'SHOP') renderShop();
+  else if (gameState === 'PLAYING') renderWorld();
   else if (gameState === 'LEVEL_UP') renderLevelUp();
   else renderGameOver();
 
